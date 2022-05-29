@@ -5,7 +5,7 @@ from ulab import numpy as np
 import xxhash
 
 
-INDEX_OFFSETS = np.array(
+_CORNER_OFFSETS = np.array(
     [
         [0, 0, 0],
         [0, 0, 1],
@@ -18,6 +18,11 @@ INDEX_OFFSETS = np.array(
     ],
     dtype=np.uint8,
 )
+
+
+_PERLIN_3D_OUTPUT_MIN = math.sqrt(3/4)
+_PERLIN_3D_OUTPUT_MAX = -math.sqrt(3/4)
+
 
 class VectorGrid:
     def __init__(self, x_size, y_size, seed):
@@ -90,101 +95,59 @@ class PerlinField:
 
         position_in_cell = pos - pos_floored
 
-        index_offsets = [
-            [0, 0, 0],
-            [0, 0, 1],
-            [0, 1, 0],
-            [0, 1, 1],
-            [1, 0, 0],
-            [1, 0, 1],
-            [1, 1, 0],
-            [1, 1, 1],
-        ]
-
-        grid_coords_to_sample = pos_floored + index_offsets
+        # Rely on our floats being small enough to be losslessly
+        # converted to int.
+        grid_coords_to_sample = np.ndarray(pos_floored+_CORNER_OFFSETS, dtype=np.uint16)
 
         gradients = [
-            self._vector_grid.get_vector(
-                # Rely on our floats being small enough to be losslessly
-                # converted to int.
-                int(pos_floored[0]) + x_index_offset,
-                int(pos_floored[1]) + y_index_offset,
-                int(pos_floored[2]) + z_index_offset,
-            )
-            for x_index_offset, y_index_offset, z_index_offset in index_offsets
+            self._vector_grid.get_vector(x, y, z)
+            for x, y, z in grid_coords_to_sample
         ]
 
-        corner_positions = [
-            [0.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0],
-            [0.0, 1.0, 0.0],
-            [0.0, 1.0, 1.0],
-            [1.0, 0.0, 0.0],
-            [1.0, 0.0, 1.0],
-            [1.0, 1.0, 0.0],
-            [1.0, 1.0, 1.0],
-        ]
-
-        offsets = corner_positions - position_in_cell
+        offsets = _CORNER_OFFSETS - position_in_cell
         dot_products = np.sum(gradients*offsets, axis=1)
 
-        interp = _interp_3d(
-            dot_products[0],
-            dot_products[1],
-            dot_products[2],
-            dot_products[3],
-            dot_products[4],
-            dot_products[5],
-            dot_products[6],
-            dot_products[7],
-            position_in_cell[0],
-            position_in_cell[1],
-            position_in_cell[2],
+        interpolated_value = _interp_3d(
+            dot_products,
+            position_in_cell,
         )
 
-        dimensions = 3
-
-        max = math.sqrt(dimensions/4)
-        min = -math.sqrt(dimensions/4)
-
-        return (interp - min)/(max-min)
+        return (interpolated_value - _PERLIN_3D_OUTPUT_MIN)/(_PERLIN_3D_OUTPUT_MAX-_PERLIN_3D_OUTPUT_MIN)
 
 
-def _smoothstep(x: float) -> float:
-    # Assume x is in [0, 1].
-    return x*x*(3 - 2*x);
+def _smoothstep(values: np.ndarray) -> np.ndarray:
+    # Assume each value is in [0, 1].
+    return values*values*(3 - 2*values);
 
 
-def _lerp(a: float, b: float, x: float) -> float:
-    return a + x*(b-a)
+def _lerp(from_values: np.ndarray, to_values: np.ndarray, pos: float) -> np.ndarray:
+    # Assume pos is in [0, 1].
+    return from_values + pos*(to_values-from_values)
 
 
 def _interp_3d(
-    val_000: float,
-    val_001: float,
-    val_010: float,
-    val_011: float,
-    val_100: float,
-    val_101: float,
-    val_110: float,
-    val_111: float,
-    x: float,
-    y: float,
-    z: float,
+    corner_values: np.ndarray,
+    pos: np.ndarray,
 ) -> float:
     # I have no idea if this is actually an okay way to do interpolation
-    # or even what this is doing. Stolen from:
+    # or even what this is doing.
+    #
+    # Stolen from:
     # https://www.scratchapixel.com/lessons/procedural-generation-virtual-worlds/perlin-noise-part-2
-    u = _smoothstep(x)
-    v = _smoothstep(y)
-    w = _smoothstep(z)
 
-    a = _lerp(val_000, val_100, u)
-    b = _lerp(val_010, val_110, u)
-    c = _lerp(val_001, val_101, u)
-    d = _lerp(val_011, val_111, u)
+    uvw = _smoothstep(pos)
 
-    e = _lerp(a, b, v)
-    f = _lerp(c, d, v)
+    low_x_values = corner_values[:4]
+    high_x_values = corner_values[4:]
 
-    return _lerp(e, f, w)
+    x_interpolated_values = _lerp(low_x_values, high_x_values, uvw[0])
+
+    low_y_values = x_interpolated_values[:2]
+    high_y_values = x_interpolated_values[2:]
+    xy_interpolated_values = _lerp(low_y_values, high_y_values, uvw[1])
+
+    low_z_value = xy_interpolated_values[:1]
+    high_z_value = xy_interpolated_values[1:]
+    xyz_interpolated_value = _lerp(low_z_value, high_z_value, uvw[2])
+
+    return xyz_interpolated_value[0]
