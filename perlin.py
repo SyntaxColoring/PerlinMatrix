@@ -24,13 +24,13 @@ _PERLIN_3D_OUTPUT_MIN = math.sqrt(3/4)
 _PERLIN_3D_OUTPUT_MAX = -math.sqrt(3/4)
 
 
-class VectorGrid:
+class GradientGrid:
     def __init__(self, x_size, y_size, seed):
         self._seed = seed
         self._x_size = x_size
         self._y_size = y_size
 
-    def get_vector(self, x, y, z):
+    def get_gradient(self, x, y, z) -> float:
         """
         x is an int [0, x_size).
         y is an int [0, y_size).
@@ -79,7 +79,7 @@ class PerlinField:
     def __init__(self, x_cells, y_cells, seed=0):
         self._x_cells = x_cells
         self._y_cells = y_cells
-        self._vector_grid = VectorGrid(
+        self._gradient_grid = GradientGrid(
             x_size = x_cells + 1,
             y_size = y_cells + 1,
             seed = seed,
@@ -100,7 +100,7 @@ class PerlinField:
         grid_coords_to_sample = np.ndarray(pos_floored+_CORNER_OFFSETS, dtype=np.uint16)
 
         gradients = [
-            self._vector_grid.get_vector(x, y, z)
+            self._gradient_grid.get_gradient(x, y, z)
             for x, y, z in grid_coords_to_sample
         ]
 
