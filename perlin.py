@@ -85,23 +85,33 @@ class PerlinField:
             seed = seed,
         )
 
+    def set_z(self, z) -> None:
+        self._z = z
+        z_floored = int(np.floor(z))
+        self._z_position_in_cell = z - z_floored
+        self._low_z_grid = self._get_gradient_slice(z_index=z_floored)
+        self._high_z_grid = self._get_gradient_slice(z_index=z_floored+1)
+
     def get(self, pos) -> float:
         """
         x and y are floats [0, 1].
         z is a float >= 0.
         """
+        pos = np.array([pos[0], pos[1], self._z], dtype=np.float)
 
-        pos_floored = np.floor(pos)
+        pos_floored = np.array(np.floor(pos), dtype=np.uint16)
 
         position_in_cell = pos - pos_floored
 
-        # Rely on our floats being small enough to be losslessly
-        # converted to int.
-        grid_coords_to_sample = np.ndarray(pos_floored+_CORNER_OFFSETS, dtype=np.uint16)
-
         gradients = [
-            self._gradient_grid.get_gradient(x, y, z)
-            for x, y, z in grid_coords_to_sample
+            self._low_z_grid[ pos_floored[0]+0][pos_floored[1]+0],
+            self._high_z_grid[pos_floored[0]+0][pos_floored[1]+0],
+            self._low_z_grid[ pos_floored[0]+0][pos_floored[1]+1],
+            self._high_z_grid[pos_floored[0]+0][pos_floored[1]+1],
+            self._low_z_grid[ pos_floored[0]+1][pos_floored[1]+0],
+            self._high_z_grid[pos_floored[0]+1][pos_floored[1]+0],
+            self._low_z_grid[ pos_floored[0]+1][pos_floored[1]+1],
+            self._high_z_grid[pos_floored[0]+1][pos_floored[1]+1],
         ]
 
         offsets = _CORNER_OFFSETS - position_in_cell
@@ -114,6 +124,18 @@ class PerlinField:
 
         return (interpolated_value - _PERLIN_3D_OUTPUT_MIN)/(_PERLIN_3D_OUTPUT_MAX-_PERLIN_3D_OUTPUT_MIN)
 
+    def _get_gradient_slice(self, z_index: int) -> np.ndarray:
+        # Returns a 2D array of 3D gradient vectors.
+        x_size = self._x_cells + 1
+        y_size = self._y_cells + 1
+        result = [
+            [
+                np.array(self._gradient_grid.get_gradient(x, y, z_index), dtype=np.float)
+                for y in range(y_size)
+            ]
+            for x in range(x_size)
+        ]
+        return result
 
 def _smoothstep(values: np.ndarray) -> np.ndarray:
     # Assume each value is in [0, 1].

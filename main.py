@@ -67,16 +67,16 @@ z = 0.0
 
 while True:
     start_time = time.monotonic()
+    perlin_field.set_z(z)
+
     for x in range(WIDTH):
         for y in range(HEIGHT):
-            # value = x/WIDTH
-            value = perlin_field.get(
-                np.array([
-                    x/WIDTH * x_cells,
-                    y/HEIGHT * y_cells,
-                    z,
-                ])
-            )
+            global_position = np.array([
+                x/WIDTH * x_cells,
+                y/HEIGHT * y_cells,
+            ])
+
+            value = perlin_field.get(global_position)
 
             # Gamma correction 2.8 stolen from:
             # https://learn.adafruit.com/led-tricks-gamma-correction/the-longer-fix
