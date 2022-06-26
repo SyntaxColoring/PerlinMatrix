@@ -12,7 +12,7 @@
 const static unsigned int HEIGHT = 32;
 const static unsigned int WIDTH = 32;
 
-const static unsigned int BIT_DEPTH = 4;
+const static unsigned int BIT_DEPTH = 5;
 
 // For 32-pixel tall matrices.
 uint8_t addr_pins[] = {17, 18, 19, 20};
@@ -39,7 +39,7 @@ Adafruit_Protomatter matrix(
     clock_pin,
     latch_pin,
     oe_pin,
-    false // doubleBuffer
+    true // doubleBuffer
 );
 
 uint32_t prevTime = 0; // Used for frames-per-second throttle
@@ -53,7 +53,28 @@ static float gamma_correct(float in)
     return std::pow(in, gamma);
 }
 
-void err(int x) {
+static uint16_t age_to_color(Adafruit_Protomatter& matrix, const float age)
+{
+    if (age < 0.5)
+    {
+        // Interpolate white to red.
+        const float interp_x = age*2.0;
+        const float red = gamma_correct(0.8);
+        const float green = gamma_correct(0.8*(1.0-interp_x));
+        const float blue = gamma_correct(0.8*(1.0-interp_x));
+        return matrix.color565(red*255, green*255, blue*255);
+    }
+    else if (age < 1.0)
+    {
+        // Interpolate red to black.
+        const float interp_x = (age - 0.5) * 2.0;
+        const float red = gamma_correct(0.8*(1.0-interp_x));
+        return matrix.color565(red*255, 0, 0);
+    }
+    else return matrix.color565(0, 0, 0);
+}
+
+static void err(int x) {
     uint8_t i;
     pinMode(LED_BUILTIN, OUTPUT);       // Using onboard LED
     for(i=1;;i++) {                     // Loop forever...
@@ -61,6 +82,8 @@ void err(int x) {
         delay(x);
     }
 }
+
+static float ages[HEIGHT][WIDTH];
 
 void setup() {
     init(); // https://forum.arduino.cc/t/how-to-avoid-the-quirks-of-the-ide-sketch-file-pre-preprocessing/262594/2
@@ -78,7 +101,8 @@ void loop() {
     while(((t = micros()) - prevTime) < (1000000L / MAX_FPS));
     prevTime = t;
 
-    auto perlin_slice = PerlinSlice2D<5, 5>(global_z);
+    auto big_perlin_slice = PerlinSlice2D<2, 2>(global_z);
+    auto little_perlin_slice = PerlinSlice2D<4, 4>(global_z*2);
 
     for (unsigned int row = 0; row < HEIGHT; row++)
     {
@@ -86,16 +110,23 @@ void loop() {
         {
             float x = float(column) / WIDTH;
             float y = float(row) / HEIGHT;
-            float perlin_value = perlin_slice.value_at(x, y);
+            float perlin_value = (big_perlin_slice.value_at(x, y) + little_perlin_slice.value_at(x, y)) / 2;
 
-            const uint8_t uncorrected_value = 255*perlin_value;
-            const uint8_t gamma_corrected_value = uncorrected_value; // gamma_correct(uncorrected_value);
+            bool is_refreshed = perlin_value > 0.6 && perlin_value < 0.62;
 
-            matrix.drawPixel(column, row, matrix.color565(gamma_corrected_value, 0, 0));
+            if (is_refreshed) ages[row][column] = 0;
+            else ages[row][column] += 0.1;
+
+            // float brightness = (1.0 - ages[row][column]);
+            // if (brightness < 0) brightness = 0;
+            // const float gamma_corrected_value = gamma_correct(brightness);
+            // matrix.drawPixel(column, row, matrix.color565(gamma_corrected_value*255, 0, 0));
+            matrix.drawPixel(column, row, age_to_color(matrix, ages[row][column]));
         }
     }
 
+    Serial.print("Showing matrix.\n");
     matrix.show();
 
-    global_z = float(t)/1000/1000;
+    global_z = float(micros())/1000/1000/4;
 }

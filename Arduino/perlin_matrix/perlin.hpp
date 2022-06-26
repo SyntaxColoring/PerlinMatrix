@@ -12,16 +12,13 @@ class PerlinSlice2D
 {
 	// Vec3 gradients_[XCells][YCells][2];
 	GradientGenerator gradient_generator_;
-	float local_z_;
+	float z_;
 
 	public:
 
 	PerlinSlice2D(const float z) // z in [0, +inf), cell boundaries at every integer
-	: gradient_generator_(GradientGenerator(XCells, YCells))
+	: gradient_generator_(GradientGenerator(XCells, YCells)), z_(z)
 	{
-		const unsigned int lower_z = unsigned(z);
-		local_z_ = z - lower_z;
-
 		// for (unsigned int gradient_x = 0; gradient_x < XCells; gradient_x++)
 		// {
 		// 	for (unsigned int gradient_y = 0; gradient_y < YCells; gradient_y++)
@@ -39,11 +36,14 @@ class PerlinSlice2D
 	// Returns a value in [0, 1].
 	float value_at(const float x, const float y) const
 	{
-		float scaled_x = x * XCells;
-		float scaled_y = y * YCells;
+		const unsigned int lower_z = unsigned(z_);
+		const float local_z = z_ - lower_z;
 
-		auto low_x = (unsigned int)(scaled_x);
-		auto low_y = (unsigned int)(scaled_y);
+		const float scaled_x = x * XCells;
+		const float scaled_y = y * YCells;
+
+		const auto low_x = (unsigned int)(scaled_x);
+		const auto low_y = (unsigned int)(scaled_y);
 
 		Vec3 gradients_at_corners[2][2][2];
 		for (unsigned int x_face = 0; x_face < 2; x_face++)
@@ -54,7 +54,7 @@ class PerlinSlice2D
 				{
 					const unsigned int gradient_x = low_x + x_face;
 					const unsigned int gradient_y = low_y + y_face;
-					const unsigned int gradient_z = z_face;
+					const unsigned int gradient_z = lower_z + z_face;
 
 					const Vec3 gradient = gradient_generator_.generate(gradient_z, gradient_x, gradient_y);
 
@@ -66,7 +66,7 @@ class PerlinSlice2D
 
 		const float local_x = scaled_x - low_x;
 		const float local_y = scaled_y - low_y;
-		const float perlin_value = interpolate_perlin(gradients_at_corners, Vec3{local_x, local_y, local_z_});
+		const float perlin_value = interpolate_perlin(gradients_at_corners, Vec3{local_x, local_y, local_z});
 		return perlin_value;
 	}
 };
