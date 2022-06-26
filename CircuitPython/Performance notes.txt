@@ -1,0 +1,9 @@
+Performance notes
+
+
+Total: 2.46 sec/frame
+
+Interpolating all values: 1.0 sec/frame
+Computing upper and lower Z slices: 0.05 sec/frame
+Simply iterating over 1024 pixels doing nothing but measuring and printing time: 0.015 sec/frame
+Applying gamma correction and formatting pixel: 0.16 sec/frame
