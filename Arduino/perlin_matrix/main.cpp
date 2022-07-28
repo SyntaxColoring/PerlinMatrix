@@ -115,13 +115,13 @@ void loop() {
             bool is_refreshed = perlin_value > 0.6 && perlin_value < 0.62;
 
             if (is_refreshed) ages[row][column] = 0;
-            else ages[row][column] += 0.1;
+            else ages[row][column] += 0.07;
 
-            // float brightness = (1.0 - ages[row][column]);
-            // if (brightness < 0) brightness = 0;
-            // const float gamma_corrected_value = gamma_correct(brightness);
-            // matrix.drawPixel(column, row, matrix.color565(gamma_corrected_value*255, 0, 0));
-            matrix.drawPixel(column, row, age_to_color(matrix, ages[row][column]));
+            float brightness = (1.0 - ages[row][column]);
+            if (brightness < 0) brightness = 0;
+            const float gamma_corrected_value = gamma_correct(brightness);
+            matrix.drawPixel(column, row, matrix.color565(gamma_corrected_value*255, 0, 0));
+            // matrix.drawPixel(column, row, age_to_color(matrix, ages[row][column]));
         }
     }
 
