@@ -94,7 +94,25 @@ void setup() {
     init(); // https://forum.arduino.cc/t/how-to-avoid-the-quirks-of-the-ide-sketch-file-pre-preprocessing/262594/2
     Serial.begin(115200);
 
-    while (!Serial) { }
+    const unsigned long start_time = micros();
+
+    while (true)
+    {
+        if (Serial)
+        {
+            Serial.println("Serial connection detected.");
+            Serial.println("Starting up.");
+            break;
+        }
+
+        const unsigned long duration = micros() - start_time;
+        if (duration > 1000*1000) // 1 sec.
+        {
+            Serial.println("Warning: No serial connection detected.");
+            Serial.println("Starting up, but early messages may be missed.");
+            break;
+        }
+    }
 
     ProtomatterStatus status = matrix.begin();
     Serial.printf("Protomatter begin() status: %d\n", status);
