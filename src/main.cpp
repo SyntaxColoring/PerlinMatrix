@@ -6,6 +6,7 @@
 
 #include <Adafruit_Protomatter.h> // For RGB matrix
 
+#include "framerate.hpp"
 #include "perlin.hpp"
 
 // In pixels:
@@ -27,7 +28,7 @@ const static uint8_t clock_pin   = 14;
 const static uint8_t latch_pin   = 15;
 const static uint8_t oe_pin      = 16;
 
-const static unsigned int MAX_FPS = 45;
+const static unsigned int MAX_FPS = 20;
 
 Adafruit_Protomatter matrix(
     WIDTH,
@@ -41,6 +42,10 @@ Adafruit_Protomatter matrix(
     oe_pin,
     true // doubleBuffer
 );
+
+static unsigned int current_frame = 0;
+static framerate::Limiter frame_limiter(MAX_FPS);
+static framerate::Counter frame_counter;
 
 uint32_t prevTime = 0; // Used for frames-per-second throttle
 float global_z = 0;
@@ -95,11 +100,12 @@ void setup() {
     Serial.printf("Protomatter begin() status: %d\n", status);
 }
 
-void loop() {
-    //  Limit the animation frame rate to MAX_FPS.
-    uint32_t t;
-    while(((t = micros()) - prevTime) < (1000000L / MAX_FPS));
-    prevTime = t;
+void loop()
+{
+    const unsigned long begin_micros = micros();
+
+    frame_limiter.begin_frame(begin_micros);
+    frame_counter.begin_frame(begin_micros);
 
     auto big_perlin_slice = PerlinSlice2D<2, 2>(global_z);
     auto little_perlin_slice = PerlinSlice2D<4, 4>(global_z*2);
@@ -125,8 +131,22 @@ void loop() {
         }
     }
 
-    Serial.print("Showing matrix.\n");
     matrix.show();
 
     global_z = float(micros())/1000/1000/4;
+
+    const unsigned long end_micros = micros();
+    const unsigned int micros_to_sleep = frame_limiter.end_frame(end_micros);
+    delayMicroseconds(micros_to_sleep);
+
+    frame_counter.end_frame(micros());
+
+    current_frame++;
+
+    if (current_frame % MAX_FPS == 0)
+    {
+        Serial.print(frame_counter.get_average_fps());
+        Serial.println(" FPS");
+        frame_counter.reset();
+    }
 }
